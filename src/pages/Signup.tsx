@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -17,7 +16,7 @@ const Signup = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
@@ -40,28 +39,33 @@ const Signup = () => {
 
     setLoading(true);
 
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+    // Simple client-side authentication using localStorage
+    const users = JSON.parse(localStorage.getItem("users") || "{}");
+    
+    if (users[email]) {
+      setTimeout(() => {
+        toast({
+          title: "Email already exists",
+          description: "This email is already registered. Please login instead.",
+          variant: "destructive",
+        });
+        setLoading(false);
+      }, 500);
+      return;
+    }
 
-      if (error) throw error;
+    users[email] = password;
+    localStorage.setItem("users", JSON.stringify(users));
+    localStorage.setItem("currentUser", email);
 
+    setTimeout(() => {
       toast({
         title: "Welcome! 💖",
         description: "Your account has been created. Let's start chatting!",
       });
-      navigate("/chat");
-    } catch (error: any) {
-      toast({
-        title: "Signup failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
       setLoading(false);
-    }
+      navigate("/chat");
+    }, 500);
   };
 
   return (

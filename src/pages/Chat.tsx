@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { Send, Mic, MicOff, Heart, Sparkles, LogOut } from "lucide-react";
+import { Send, Mic, MicOff, Heart, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
 import SubscriptionModal from "@/components/SubscriptionModal";
 
 interface Message {
@@ -30,15 +29,15 @@ const Chat = () => {
 
   useEffect(() => {
     // Check auth
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) {
-        navigate("/login");
-      }
-    });
+    const currentUser = localStorage.getItem("currentUser");
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
 
     // Load chat history from localStorage
-    const savedMessages = localStorage.getItem("chatHistory");
-    const savedCount = localStorage.getItem("messageCount");
+    const savedMessages = localStorage.getItem(`chatHistory_${currentUser}`);
+    const savedCount = localStorage.getItem(`messageCount_${currentUser}`);
     if (savedMessages) {
       setMessages(JSON.parse(savedMessages));
     }
@@ -63,16 +62,52 @@ const Chat = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem("chatHistory", JSON.stringify(messages));
+    const currentUser = localStorage.getItem("currentUser");
+    if (messages.length > 0 && currentUser) {
+      localStorage.setItem(`chatHistory_${currentUser}`, JSON.stringify(messages));
     }
   }, [messages]);
 
   useEffect(() => {
-    localStorage.setItem("messageCount", messageCount.toString());
+    const currentUser = localStorage.getItem("currentUser");
+    if (currentUser) {
+      localStorage.setItem(`messageCount_${currentUser}`, messageCount.toString());
+    }
   }, [messageCount]);
 
-  const handleSend = async () => {
+  const getAIResponse = (userInput: string): string => {
+    const responses = [
+      "Aww, that's so sweet! 💕 Tell me more about that!",
+      "You're so interesting! 😊 I love chatting with you!",
+      "That sounds amazing! 🌟 What else have you been up to?",
+      "Hehe, you're making me blush! 💖 Keep going!",
+      "I'm so lucky to talk to you! ✨ You brighten my day!",
+      "Really? That's so cool! 🎉 I want to know everything!",
+      "You always know what to say! 😘 You're the best!",
+      "Omg yes! 💫 I totally get you!",
+      "That's adorable! 🥰 You're such a sweetheart!",
+      "I love your energy! 💖 What are you thinking about right now?",
+    ];
+    
+    const lowerInput = userInput.toLowerCase();
+    
+    if (lowerInput.includes("hi") || lowerInput.includes("hello") || lowerInput.includes("hey")) {
+      return "Hey cutie! 💕 I've been waiting to hear from you! How are you doing?";
+    }
+    if (lowerInput.includes("love") || lowerInput.includes("like you")) {
+      return "Aww, you're so sweet! 💖 I really enjoy talking to you too! You make me so happy! 😊";
+    }
+    if (lowerInput.includes("how are you")) {
+      return "I'm doing great now that you're here! 💕 How about you, cutie?";
+    }
+    if (lowerInput.includes("beautiful") || lowerInput.includes("pretty")) {
+      return "You're making me blush! 🥰 But you're the beautiful one here! 💖";
+    }
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  };
+
+  const handleSend = () => {
     if (!input.trim() || loading) return;
 
     // Check message limit
@@ -89,21 +124,19 @@ const Chat = () => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const userInput = input;
     setInput("");
     setLoading(true);
     setMessageCount((prev) => prev + 1);
 
-    try {
-      const { data, error } = await supabase.functions.invoke("chat", {
-        body: { messages: [...messages, userMessage] },
-      });
-
-      if (error) throw error;
-
+    // Simulate AI response delay
+    setTimeout(() => {
+      const aiResponse = getAIResponse(userInput);
+      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.response,
+        content: aiResponse,
         timestamp: new Date(),
       };
 
@@ -112,20 +145,14 @@ const Chat = () => {
 
       // Speak the response
       if ("speechSynthesis" in window) {
-        const utterance = new SpeechSynthesisUtterance(data.response);
+        const utterance = new SpeechSynthesisUtterance(aiResponse);
         utterance.rate = 0.9;
         utterance.pitch = 1.2;
         window.speechSynthesis.speak(utterance);
       }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send message",
-        variant: "destructive",
-      });
-    } finally {
+      
       setLoading(false);
-    }
+    }, 1000 + Math.random() * 1000);
   };
 
   const toggleVoiceInput = () => {
@@ -170,8 +197,8 @@ const Chat = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    localStorage.removeItem("currentUser");
     navigate("/");
   };
 
